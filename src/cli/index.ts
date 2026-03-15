@@ -8,6 +8,9 @@ import { runAdd } from './add.js';
 import { runApprove } from './approve.js';
 import { runStatus } from './status.js';
 import { runClean } from './clean.js';
+import { runInline } from './inline.js';
+import { runInit } from './init.js';
+import { runSetup } from './setup.js';
 import { runConfig } from './config.js';
 import { runEval } from './eval.js';
 import { runMCPStart, runMCPConfig } from './mcp.js';
@@ -81,6 +84,33 @@ program
   .description('Show the current handoff packet status and recent activity')
   .action(async () => {
     await runStatus().catch(die);
+  });
+
+// ── setup ──────────────────────────────────────────────────────────────────
+program
+  .command('setup')
+  .description('One-time setup: auto-detect installed agents and configure MCP + slash commands for all of them')
+  .option('--force',   'Configure all agents even if not detected')
+  .option('--dry-run', 'Show what would be configured without making changes')
+  .action(async (opts) => {
+    await runSetup({ force: opts.force, dryRun: opts.dryRun }).catch(die);
+  });
+
+// ── init ───────────────────────────────────────────────────────────────────
+program
+  .command('init')
+  .description('Install the /handoff slash command into an agent\'s command directory')
+  .requiredOption('--agent <agent>', 'Agent to configure: claude-code | codex | cursor | all')
+  .action((opts) => {
+    runInit(opts);
+  });
+
+// ── inline ─────────────────────────────────────────────────────────────────
+program
+  .command('inline')
+  .description('Output an ultra-compressed handoff block (~150 tokens) for pasting as the first message to the next agent')
+  .action((opts) => {
+    runInline(opts);
   });
 
 // ── clean ──────────────────────────────────────────────────────────────────

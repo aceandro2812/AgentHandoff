@@ -12,6 +12,8 @@ const INSTRUCTION_FILES: Array<{ path: string; label: string; global?: boolean }
   { path: '.clinerules',                         label: '.clinerules' },
   { path: '.github/copilot-instructions.md',    label: 'copilot-instructions' },
   { path: 'codex.md',                            label: 'codex.md' },
+  { path: 'GEMINI.md',                           label: 'GEMINI.md' },
+  { path: '.idx/airules.md',                     label: 'firebase-studio-rules' },
 ];
 
 const GLOBAL_INSTRUCTION_FILES: Array<{ path: () => string; label: string }> = [
@@ -27,10 +29,14 @@ export interface InstructionFile {
   content: string;
 }
 
-export function captureInstructionFiles(projectRoot: string): InstructionFile[] {
+export function captureInstructionFiles(
+  projectRoot: string,
+  excludePaths: string[] = [],
+): InstructionFile[] {
   const results: InstructionFile[] = [];
 
   for (const { path, label } of INSTRUCTION_FILES) {
+    if (excludePaths.includes(path)) continue;
     const fullPath = join(projectRoot, path);
     if (existsSync(fullPath)) {
       const content = readFileSync(fullPath, 'utf8').trim();

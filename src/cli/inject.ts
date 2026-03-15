@@ -8,6 +8,11 @@ import { CodexInjector } from '../inject/codex.js';
 import { ClaudeCodeInjector } from '../inject/claude-code.js';
 import { CursorInjector } from '../inject/cursor.js';
 import { AiderInjector } from '../inject/aider.js';
+import { CopilotInjector } from '../inject/copilot.js';
+import { WindsurfInjector } from '../inject/windsurf.js';
+import { GeminiInjector } from '../inject/gemini.js';
+import { FirebaseStudioInjector } from '../inject/firebase-studio.js';
+import { AntigravityInjector } from '../inject/antigravity.js';
 import { Injector } from '../inject/base.js';
 
 interface InjectOptions {
@@ -21,7 +26,12 @@ function getInjector(target: TargetAgent): Injector {
     case 'claude-code': return new ClaudeCodeInjector();
     case 'cursor':      return new CursorInjector();
     case 'aider':       return new AiderInjector();
-    default:            return new GenericInjector();
+    case 'copilot':     return new CopilotInjector();
+    case 'windsurf':         return new WindsurfInjector();
+    case 'gemini':           return new GeminiInjector();
+    case 'firebase-studio':  return new FirebaseStudioInjector();
+    case 'antigravity':      return new AntigravityInjector();
+    default:                 return new GenericInjector();
   }
 }
 

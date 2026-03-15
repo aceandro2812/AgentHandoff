@@ -12,6 +12,11 @@ import { CodexInjector } from '../inject/codex.js';
 import { ClaudeCodeInjector } from '../inject/claude-code.js';
 import { CursorInjector } from '../inject/cursor.js';
 import { AiderInjector } from '../inject/aider.js';
+import { CopilotInjector } from '../inject/copilot.js';
+import { WindsurfInjector } from '../inject/windsurf.js';
+import { GeminiInjector } from '../inject/gemini.js';
+import { FirebaseStudioInjector } from '../inject/firebase-studio.js';
+import { AntigravityInjector } from '../inject/antigravity.js';
 import { GenericInjector } from '../inject/generic.js';
 import { Injector } from '../inject/base.js';
 
@@ -34,6 +39,11 @@ export async function runClean(): Promise<void> {
     new ClaudeCodeInjector(),
     new CursorInjector(),
     new AiderInjector(),
+    new CopilotInjector(),
+    new WindsurfInjector(),
+    new GeminiInjector(),
+    new FirebaseStudioInjector(),
+    new AntigravityInjector(),
     new GenericInjector(),
   ];
 

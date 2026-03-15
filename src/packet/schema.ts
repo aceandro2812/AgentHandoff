@@ -64,16 +64,21 @@ export type TaskState = z.infer<typeof TaskStateSchema>;
 export type Provenance = z.infer<typeof ProvenanceSchema>;
 export type HandoffPacket = z.infer<typeof HandoffPacketSchema>;
 
-export const SUPPORTED_SOURCE_AGENTS = ['claude-code', 'codex', 'cursor', 'aider', 'manual'] as const;
-export const SUPPORTED_TARGET_AGENTS = ['claude-code', 'codex', 'cursor', 'aider', 'generic'] as const;
+export const SUPPORTED_SOURCE_AGENTS = ['claude-code', 'codex', 'cursor', 'aider', 'windsurf', 'copilot', 'gemini', 'firebase-studio', 'antigravity', 'manual'] as const;
+export const SUPPORTED_TARGET_AGENTS = ['claude-code', 'codex', 'cursor', 'aider', 'windsurf', 'copilot', 'gemini', 'firebase-studio', 'antigravity', 'generic'] as const;
 
 export const AGENT_DESCRIPTIONS: Record<string, string> = {
-  'claude-code': 'Anthropic Claude Code CLI',
-  'codex':       'OpenAI Codex CLI',
-  'cursor':      'Cursor editor',
-  'aider':       'Aider CLI',
-  'manual':      'Manual / no agent (notes only)',
-  'generic':     'Generic (writes .agenthandoff/injection.md)',
+  'claude-code':      'Anthropic Claude Code CLI',
+  'codex':            'OpenAI Codex CLI',
+  'cursor':           'Cursor editor',
+  'aider':            'Aider CLI',
+  'windsurf':         'Windsurf (Codeium)',
+  'copilot':          'GitHub Copilot (VS Code + CLI)',
+  'gemini':           'Google Gemini CLI',
+  'firebase-studio':  'Firebase Studio (Project IDX)',
+  'antigravity':      'Google Antigravity (agentic dev platform)',
+  'manual':           'Manual / no agent (notes only)',
+  'generic':          'Generic (writes .agenthandoff/injection.md)',
 };
 
 export type SourceAgent = typeof SUPPORTED_SOURCE_AGENTS[number];

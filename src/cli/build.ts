@@ -16,6 +16,8 @@ import { SUPPORTED_SOURCE_AGENTS, SUPPORTED_TARGET_AGENTS, SourceAgent, TargetAg
 interface BuildOptions {
   from: string;
   to: string;
+  llm?: boolean;
+  sessions?: boolean;
 }
 
 export async function runBuild(opts: BuildOptions): Promise<void> {
@@ -33,12 +35,15 @@ export async function runBuild(opts: BuildOptions): Promise<void> {
     process.exit(1);
   }
 
-  const spinner = ora('Capturing context from Tier 1 sources...').start();
+  const mode = opts.llm ? 'LLM compression + Tier 1 sources' : 'Tier 1 sources (rule-based)';
+  const spinner = ora(`Capturing context — ${mode}...`).start();
 
   const result = await buildPacket({
     projectRoot,
     sourceAgent: opts.from as SourceAgent,
     targetAgent: opts.to as TargetAgent,
+    useLLM: opts.llm,
+    useSessions: opts.sessions,
   });
 
   spinner.succeed('Context captured');
@@ -53,10 +58,13 @@ export async function runBuild(opts: BuildOptions): Promise<void> {
   const mdPath = join(dir, PACKET_MD);
   writeFileSync(mdPath, renderPacketAsMarkdown(result.packet), 'utf8');
 
-  appendAuditLog(projectRoot, `build: ${opts.from} → ${opts.to} | sources: ${result.sourcesUsed.join(', ')}`);
+  appendAuditLog(
+    projectRoot,
+    `build: ${opts.from} → ${opts.to} | llm: ${result.llmUsed} | sources: ${result.sourcesUsed.join(', ')}`
+  );
 
   console.log('');
-  console.log(chalk.green('✓ Handoff packet built'));
+  console.log(chalk.green('✓ Handoff packet built') + (result.llmUsed ? chalk.cyan(' (LLM-compressed)') : ''));
   console.log(`  ${chalk.dim('JSON:')} ${jsonPath}`);
   console.log(`  ${chalk.dim('Markdown:')} ${mdPath}`);
 

@@ -8,7 +8,8 @@ import { runAdd } from './add.js';
 import { runApprove } from './approve.js';
 import { runStatus } from './status.js';
 import { runClean } from './clean.js';
-import { SUPPORTED_SOURCE_AGENTS, SUPPORTED_TARGET_AGENTS } from '../packet/schema.js';
+import { runConfig } from './config.js';
+import { SUPPORTED_SOURCE_AGENTS, SUPPORTED_TARGET_AGENTS, AGENT_DESCRIPTIONS } from '../packet/schema.js';
 
 const program = new Command();
 
@@ -20,9 +21,11 @@ program
 // ── build ──────────────────────────────────────────────────────────────────
 program
   .command('build')
-  .description('Build a handoff packet from current project context (Tier 1 sources)')
+  .description('Build a handoff packet from current project context')
   .requiredOption('--from <agent>', `Source agent (${SUPPORTED_SOURCE_AGENTS.join('|')})`)
   .requiredOption('--to <agent>', `Target agent (${SUPPORTED_TARGET_AGENTS.join('|')})`)
+  .option('--llm', 'Use LLM to compress and structure context (requires API key)')
+  .option('--sessions', 'Include agent session files as context (Tier 2)')
   .action(async (opts) => {
     await runBuild(opts).catch(die);
   });
@@ -92,10 +95,27 @@ program
   .description('List supported source and target agents')
   .action(() => {
     console.log(chalk.bold('\nSource agents:'));
-    for (const a of SUPPORTED_SOURCE_AGENTS) console.log(`  ${chalk.cyan(a)}`);
+    for (const a of SUPPORTED_SOURCE_AGENTS) {
+      console.log(`  ${chalk.cyan(a.padEnd(14))} ${chalk.dim(AGENT_DESCRIPTIONS[a] ?? '')}`);
+    }
     console.log(chalk.bold('\nTarget agents:'));
-    for (const a of SUPPORTED_TARGET_AGENTS) console.log(`  ${chalk.cyan(a)}`);
+    for (const a of SUPPORTED_TARGET_AGENTS) {
+      console.log(`  ${chalk.cyan(a.padEnd(14))} ${chalk.dim(AGENT_DESCRIPTIONS[a] ?? '')}`);
+    }
     console.log('');
+  });
+
+// ── config ─────────────────────────────────────────────────────────────────
+program
+  .command('config')
+  .description('Configure LLM provider and API key for compression')
+  .option('--key <apiKey>',      'API key (auto-detects provider from prefix)')
+  .option('--provider <name>',   'LLM provider: anthropic | openai')
+  .option('--model <model>',     'Override model (e.g. claude-haiku-4-5-20251001)')
+  .option('--show',              'Show current config')
+  .option('--clear',             'Clear stored config')
+  .action(async (opts) => {
+    await runConfig(opts).catch(die);
   });
 
 function die(err: unknown): never {

@@ -10,6 +10,8 @@ import {
 import { HandoffPacket } from '../packet/schema.js';
 import { CodexInjector } from '../inject/codex.js';
 import { ClaudeCodeInjector } from '../inject/claude-code.js';
+import { CursorInjector } from '../inject/cursor.js';
+import { AiderInjector } from '../inject/aider.js';
 import { GenericInjector } from '../inject/generic.js';
 import { Injector } from '../inject/base.js';
 
@@ -30,6 +32,8 @@ export async function runClean(): Promise<void> {
   const injectors: Injector[] = [
     new CodexInjector(),
     new ClaudeCodeInjector(),
+    new CursorInjector(),
+    new AiderInjector(),
     new GenericInjector(),
   ];
 

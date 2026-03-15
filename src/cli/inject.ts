@@ -6,6 +6,8 @@ import { HandoffPacket, TargetAgent, SUPPORTED_TARGET_AGENTS } from '../packet/s
 import { GenericInjector } from '../inject/generic.js';
 import { CodexInjector } from '../inject/codex.js';
 import { ClaudeCodeInjector } from '../inject/claude-code.js';
+import { CursorInjector } from '../inject/cursor.js';
+import { AiderInjector } from '../inject/aider.js';
 import { Injector } from '../inject/base.js';
 
 interface InjectOptions {
@@ -17,6 +19,8 @@ function getInjector(target: TargetAgent): Injector {
   switch (target) {
     case 'codex':       return new CodexInjector();
     case 'claude-code': return new ClaudeCodeInjector();
+    case 'cursor':      return new CursorInjector();
+    case 'aider':       return new AiderInjector();
     default:            return new GenericInjector();
   }
 }

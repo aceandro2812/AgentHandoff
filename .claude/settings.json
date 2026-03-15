@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agenthandoff": {
+      "command": "node",
+      "args": [
+        "F:\\All Projects\\Agentic AI projects\\Agent handoff/dist/cli/index.js",
+        "mcp",
+        "start"
+      ]
+    }
+  }
+}

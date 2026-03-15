@@ -9,6 +9,8 @@ import { runApprove } from './approve.js';
 import { runStatus } from './status.js';
 import { runClean } from './clean.js';
 import { runConfig } from './config.js';
+import { runEval } from './eval.js';
+import { runMCPStart, runMCPConfig } from './mcp.js';
 import { SUPPORTED_SOURCE_AGENTS, SUPPORTED_TARGET_AGENTS, AGENT_DESCRIPTIONS } from '../packet/schema.js';
 
 const program = new Command();
@@ -103,6 +105,34 @@ program
       console.log(`  ${chalk.cyan(a.padEnd(14))} ${chalk.dim(AGENT_DESCRIPTIONS[a] ?? '')}`);
     }
     console.log('');
+  });
+
+// ── eval ───────────────────────────────────────────────────────────────────
+program
+  .command('eval')
+  .description('Evaluate the handoff packet: compare token costs vs cold-start and manual summary')
+  .action(async () => {
+    await runEval().catch(die);
+  });
+
+// ── mcp ────────────────────────────────────────────────────────────────────
+const mcp = program
+  .command('mcp')
+  .description('MCP server commands');
+
+mcp
+  .command('start')
+  .description('Start the AgentHandoff MCP server (stdio transport)')
+  .action(async () => {
+    await runMCPStart({}).catch(die);
+  });
+
+mcp
+  .command('config')
+  .description('Write MCP server config for an agent')
+  .requiredOption('--for <agent>', 'Target agent: claude-code | cursor | codex | all')
+  .action(async (opts) => {
+    await runMCPConfig(opts).catch(die);
   });
 
 // ── config ─────────────────────────────────────────────────────────────────

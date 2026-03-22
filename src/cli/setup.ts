@@ -6,6 +6,7 @@ import { homedir, platform } from 'os';
 import { getProjectRoot } from '../utils/config.js';
 import { generateMCPConfig, AgentTarget } from '../mcp/config-generator.js';
 import { runInit } from './init.js';
+import { injectInstructions } from '../inject/instructions.js';
 
 // ── Agent detection ─────────────────────────────────────────────────────────
 
@@ -244,6 +245,8 @@ interface SetupResult {
   agent: DetectedAgent;
   mcpDone: boolean;
   slashDone: boolean;
+  instructionsDone: boolean;
+  instructionsFile: string | null;
   errors: string[];
 }
 
@@ -285,7 +288,11 @@ export async function runSetup(opts: { force?: boolean; dryRun?: boolean }): Pro
   if (opts.dryRun) {
     console.log(chalk.dim('\n[dry-run] Would configure:'));
     for (const a of toSetup) {
-      console.log(`  ${a.label}: ${a.mcpSupported ? 'MCP + ' : ''}${a.slashCommandSupported ? 'slash commands' : 'file injection only'}`);
+      const parts: string[] = [];
+      if (a.mcpSupported) parts.push('MCP');
+      if (a.slashCommandSupported) parts.push('slash commands');
+      parts.push('instructions');
+      console.log(`  ${a.label}: ${parts.join(' + ')}`);
     }
     return;
   }
@@ -297,7 +304,7 @@ export async function runSetup(opts: { force?: boolean; dryRun?: boolean }): Pro
   const results: SetupResult[] = [];
 
   for (const agent of toSetup) {
-    const result: SetupResult = { agent, mcpDone: false, slashDone: false, errors: [] };
+    const result: SetupResult = { agent, mcpDone: false, slashDone: false, instructionsDone: false, instructionsFile: null, errors: [] };
 
     // MCP config
     if (agent.mcpSupported) {
@@ -319,6 +326,17 @@ export async function runSetup(opts: { force?: boolean; dryRun?: boolean }): Pro
       }
     }
 
+    // Agent instruction file (autonomous handoff instructions)
+    try {
+      const instrFile = injectInstructions(agent.id, projectRoot);
+      if (instrFile) {
+        result.instructionsDone = true;
+        result.instructionsFile = instrFile;
+      }
+    } catch (e) {
+      result.errors.push(`Instruction injection failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
     results.push(result);
   }
 
@@ -328,14 +346,20 @@ export async function runSetup(opts: { force?: boolean; dryRun?: boolean }): Pro
   console.log(chalk.dim('─'.repeat(60)));
   console.log('');
 
-  for (const { agent, mcpDone, slashDone, errors } of results) {
+  for (const { agent, mcpDone, slashDone, instructionsDone, instructionsFile, errors } of results) {
     const tags: string[] = [];
-    if (mcpDone)    tags.push(chalk.green('MCP'));
-    if (slashDone)  tags.push(chalk.green('slash commands'));
-    if (!mcpDone && !slashDone && errors.length === 0) tags.push(chalk.yellow('file injection (no MCP/commands for this agent)'));
+    if (mcpDone)          tags.push(chalk.green('MCP'));
+    if (slashDone)        tags.push(chalk.green('slash commands'));
+    if (instructionsDone) tags.push(chalk.green('instructions'));
+    if (!mcpDone && !slashDone && !instructionsDone && errors.length === 0) {
+      tags.push(chalk.yellow('file injection only'));
+    }
 
     const status = errors.length > 0 ? chalk.red('✗') : chalk.green('✓');
     console.log(`  ${status} ${chalk.cyan(agent.label)}: ${tags.join(' + ')}`);
+    if (instructionsFile) {
+      console.log(`      ${chalk.dim(`→ ${instructionsFile}`)}`);
+    }
     for (const e of errors) {
       console.log(`      ${chalk.red(e)}`);
     }
@@ -357,38 +381,41 @@ function printUsageGuide(results: SetupResult[]): void {
   const hasCodex      = configured.some(r => r.agent.id === 'codex');
   const hasCursor     = configured.some(r => r.agent.id === 'cursor');
 
+  console.log(chalk.bold('  Autonomous handoff (no manual CLI needed):'));
+  console.log('');
+
   if (hasClaudeCode) {
-    console.log(chalk.bold('  Claude Code → any agent'));
-    console.log(`    At the end of your session, run inside Claude Code:`);
-    console.log(`    ${chalk.cyan('/project:handoff codex')}  ${chalk.dim('(or cursor, aider, etc.)')}`);
-    console.log(`    Claude writes the handoff packet from its own context — zero API cost.`);
+    console.log(`    ${chalk.cyan('Claude Code')}: Just say ${chalk.bold('"handoff to codex"')} in conversation.`);
+    console.log(`      Claude writes the packet automatically. Zero API cost.`);
+    console.log(`      Context pushes (decisions, warnings) happen throughout the session via MCP.`);
     console.log('');
   }
 
   if (hasCodex) {
-    console.log(chalk.bold('  Codex → any agent'));
-    console.log(`    At the end of your Codex session:`);
-    console.log(`    ${chalk.cyan('/handoff claude-code')}  ${chalk.dim('(or cursor, aider, etc.)')}`);
+    console.log(`    ${chalk.cyan('Codex')}: Opens with context automatically via MCP.`);
+    console.log(`      Say ${chalk.bold('"handoff to claude-code"')} to switch back.`);
     console.log('');
   }
 
   if (hasCursor) {
-    console.log(chalk.bold('  Cursor → any agent'));
-    console.log(`    Ask Cursor in any chat:`);
-    console.log(`    ${chalk.cyan('"generate handoff for claude-code"')}`);
+    console.log(`    ${chalk.cyan('Cursor')}: Opens with context via MCP.`);
+    console.log(`      Say ${chalk.bold('"generate handoff for claude-code"')} to switch.`);
     console.log('');
   }
 
-  console.log(chalk.bold('  Receiving the handoff (any agent)'));
-  console.log(`    Option A — MCP  ${chalk.dim('(recommended, on-demand, fewest tokens):')}`);
-  console.log(`    ${chalk.cyan('agenthandoff mcp start')}  ${chalk.dim('# run in background — agent queries what it needs')}`);
+  const hasGemini = configured.some(r => r.agent.id === 'gemini');
+  if (hasGemini) {
+    console.log(`    ${chalk.cyan('Gemini CLI')}: Opens with context via MCP.`);
+    console.log(`      Say ${chalk.bold('"handoff to codex"')} to switch.`);
+    console.log('');
+  }
+
+  console.log(chalk.bold('  The flow:'));
+  console.log(`    1. Work in any agent — context is pushed to MCP automatically`);
+  console.log(`    2. Say "handoff to <agent>" — packet is written`);
+  console.log(`    3. Open the next agent — it reads context via MCP on startup`);
   console.log('');
-  console.log(`    Option B — Inline paste ${chalk.dim('(~68 tokens, fastest for quick switches):')}`);
-  console.log(`    ${chalk.cyan('agenthandoff inline')}  ${chalk.dim('# copy output, paste as first message in new session')}`);
-  console.log('');
-  console.log(`    Option C — File injection ${chalk.dim('(fallback for agents without MCP):')}`);
-  console.log(`    ${chalk.cyan('agenthandoff inject --to <agent>')}`);
-  console.log('');
+  console.log(chalk.dim('  Manual alternatives: `agenthandoff inline` (paste) or `agenthandoff inject --to <agent>` (file)'));
   console.log(chalk.dim('  Run `agenthandoff --help` for the full command reference.'));
   console.log('');
 }

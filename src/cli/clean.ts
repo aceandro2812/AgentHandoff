@@ -19,6 +19,7 @@ import { FirebaseStudioInjector } from '../inject/firebase-studio.js';
 import { AntigravityInjector } from '../inject/antigravity.js';
 import { GenericInjector } from '../inject/generic.js';
 import { Injector } from '../inject/base.js';
+import { cleanInstructions, INSTRUCTION_AGENTS } from '../inject/instructions.js';
 
 export async function runClean(): Promise<void> {
   const projectRoot = getProjectRoot();
@@ -50,6 +51,12 @@ export async function runClean(): Promise<void> {
   for (const injector of injectors) {
     const files = await injector.clean(projectRoot);
     removed.push(...files);
+  }
+
+  // Clean instruction file injections
+  for (const agentId of INSTRUCTION_AGENTS) {
+    const cleaned = cleanInstructions(agentId, projectRoot);
+    if (cleaned) removed.push(cleaned + ' (instructions removed)');
   }
 
   // Remove packet files

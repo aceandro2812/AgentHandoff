@@ -22,7 +22,7 @@ function getMCPCommand(): { command: string; args: string[] } {
     const which = execSync('which agenthandoff 2>/dev/null || where agenthandoff 2>nul', {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim().split('\n')[0] ?? '';
+    }).trim().split(/\r?\n/)[0]?.replace(/\r/g, '') ?? '';
     if (which) return { command: which, args: ['mcp', 'start'] };
   } catch {
     // ignore

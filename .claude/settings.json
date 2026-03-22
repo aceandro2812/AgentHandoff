@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "agenthandoff": {
-      "command": "C:\\Users\\jatin\\AppData\\Roaming\\npm\\agenthandoff\r",
+      "command": "C:\\Users\\jatin\\AppData\\Roaming\\npm\\agenthandoff",
       "args": [
         "mcp",
         "start"

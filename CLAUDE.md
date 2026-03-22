@@ -10,3 +10,66 @@ Use **jcodemunch-mcp** for all code lookups. Never read full files when MCP is a
 2. Use `search_symbols` / `get_symbol` to find and retrieve code by symbol name.
 3. Use `get_repo_outline` or `get_file_outline` to explore structure.
 4. Fall back to direct file reads only when editing or when MCP is unavailable.
+
+## AgentHandoff — Autonomous Context Transfer
+
+This project has an **agenthandoff** MCP server that auto-starts with your session. Use it to build up handoff context as you work, so switching to another agent (Codex, Cursor, Gemini, etc.) is seamless.
+
+### During your session — push context automatically
+
+Whenever you make an important decision, discover a constraint, or hit a dead end, call the MCP tools immediately:
+
+- `push_decision` — record architectural decisions as you make them (statement, reason, related files)
+- `push_warning` — record constraints or dangers discovered
+- `push_failed_attempt` — record approaches that failed and why (critical — prevents the next agent from repeating mistakes)
+- `set_task_state` — update the current goal, step, and next action
+- `add_note` — record anything else worth preserving
+
+Do this proactively throughout the session. Don't wait until the end.
+
+### When the user says "handoff" or "switch to X"
+
+When the user says any of: "handoff to codex", "switch to cursor", "hand off", "transfer to gemini", or similar — generate the complete handoff packet by writing these two files using your Write tool:
+
+**`.agenthandoff/current-handoff.json`** — structured packet:
+```json
+{
+  "schema_version": "1.0",
+  "project_id": "unknown",
+  "project_path": "<absolute path of this project>",
+  "created_at": "<ISO timestamp>",
+  "source_agent": "claude-code",
+  "target_agent": "<target from user's message, default 'generic'>",
+  "task_state": {
+    "goal": "<specific goal>",
+    "current_step": "<what you were doing>",
+    "next_action": "<EXACT next action with file:line>",
+    "blocked_on": null
+  },
+  "decisions": [{"statement": "", "reason": "", "related_files": [], "confidence": 0.95}],
+  "facts": [{"statement": "", "source": "claude-code-session", "related_files": []}],
+  "warnings": [{"statement": "", "source": "claude-code-session"}],
+  "failed_attempts": [{"what": "", "why_failed": "", "recommendation": ""}],
+  "related_files": [],
+  "open_questions": [],
+  "manual_notes": [],
+  "provenance": {
+    "capture_method": "agent-self-reported",
+    "sources_used": ["claude-code-session-context"],
+    "review_status": "approved"
+  }
+}
+```
+
+**`.agenthandoff/current-handoff.md`** — human-readable markdown with sections: Task State, Decisions, Warnings, Failed Attempts, Related Files, Next Action.
+
+Rules for the packet:
+- Be specific. "worked on auth" is useless. "Added JWT refresh at src/auth/routes.ts:45" is good.
+- Every failed_attempt MUST include why_failed.
+- next_action must be exact enough that the next agent starts immediately.
+- Include ALL decisions and warnings from the session, not just recent ones.
+- After writing, confirm: "Handoff ready. Open the target agent — it will pick up context automatically via MCP."
+
+### On session start — check for incoming handoff
+
+At the start of this session, call `get_task_state` from the agenthandoff MCP server. If a handoff packet exists from a previous agent, acknowledge the context and continue from where the previous agent left off. If no packet exists, proceed normally.

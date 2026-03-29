@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { getProjectRoot, getHandoffDir, appendAuditLog, PACKET_JSON } from '../utils/config.js';
+import { checkStaleness, saveInjectSnapshot } from './diff.js';
 import { HandoffPacket, TargetAgent, SUPPORTED_TARGET_AGENTS } from '../packet/schema.js';
 import { GenericInjector } from '../inject/generic.js';
 import { CodexInjector } from '../inject/codex.js';
@@ -61,8 +62,18 @@ export async function runInject(opts: InjectOptions): Promise<void> {
     process.exit(1);
   }
 
+  // Warn if packet is stale (>24h old)
+  const staleHours = checkStaleness(packet);
+  if (staleHours > 0) {
+    console.log(chalk.yellow(`\n⚠ Packet is ${Math.round(staleHours)}h old — consider rebuilding for fresher context.`));
+    console.log(chalk.dim('  agenthandoff build --from <agent> --to ' + opts.to + '\n'));
+  }
+
   const injector = getInjector(opts.to as TargetAgent);
   const result = await injector.inject(packet, projectRoot);
+
+  // Save snapshot for future diff
+  saveInjectSnapshot(packet, dir);
 
   appendAuditLog(projectRoot, `inject: → ${opts.to} | files: ${result.files_written.join(', ')}`);
 

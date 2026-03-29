@@ -14,6 +14,8 @@ import { runSetup } from './setup.js';
 import { runConfig } from './config.js';
 import { runEval } from './eval.js';
 import { runMCPStart, runMCPConfig } from './mcp.js';
+import { runDiff } from './diff.js';
+import { runPRDescription } from './pr.js';
 import { SUPPORTED_SOURCE_AGENTS, SUPPORTED_TARGET_AGENTS, AGENT_DESCRIPTIONS } from '../packet/schema.js';
 
 const program = new Command();
@@ -112,6 +114,25 @@ program
   .description('Output an ultra-compressed handoff block (~150 tokens) for pasting as the first message to the next agent')
   .action((opts) => {
     runInline(opts);
+  });
+
+// ── diff ───────────────────────────────────────────────────────────────────
+program
+  .command('diff')
+  .description('Show what changed in the packet since the last inject. Warns if packet is stale (>24h old).')
+  .action(async () => {
+    await runDiff().catch(die);
+  });
+
+// ── pr-description ─────────────────────────────────────────────────────────
+program
+  .command('pr-description')
+  .alias('pr')
+  .description('Generate a GitHub pull request description from the handoff packet')
+  .option('--push',          'Create the PR on GitHub automatically (requires `gh` CLI)')
+  .option('--title <title>', 'Custom PR title (default: derived from task goal)')
+  .action(async (opts) => {
+    await runPRDescription(opts).catch(die);
   });
 
 // ── clean ──────────────────────────────────────────────────────────────────

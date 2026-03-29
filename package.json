@@ -7,12 +7,18 @@
   "bin": {
     "agenthandoff": "./dist/cli/index.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/cli/index.js",
-    "lint": "eslint src/**/*.ts",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "npm run build"
   },
   "keywords": [
     "ai",
@@ -20,9 +26,15 @@
     "context",
     "handoff",
     "claude-code",
-    "codex"
+    "codex",
+    "cursor",
+    "aider",
+    "mcp"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "chalk": "^5.3.0",
@@ -33,10 +45,8 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@jest/globals": "^29.7.0",
     "@types/node": "^22.0.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.2.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.2"
   }
 }

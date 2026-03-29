@@ -1,0 +1,13 @@
+src/
+src/__tests__/
+*.test.ts
+*.spec.ts
+.claude/
+.codex/
+.gemini/
+.cursor/
+.antigravity/
+.github/workflows/
+tsconfig.json
+.eslintrc*
+RESEARCH_AND_PLAN.md

@@ -13,6 +13,7 @@ import {
   handleGetRelatedFiles,
   handleGetSummary,
 } from './tools.js';
+import { searchContext, formatSearchResults } from './search.js';
 
 function noPacket() {
   return {
@@ -88,6 +89,22 @@ export async function startMCPServer(): Promise<void> {
   );
 
   server.tool(
+    'get_context_for_task',
+    'Search the handoff packet for context relevant to a specific task. Returns only the most relevant decisions, warnings, and failed attempts — far fewer tokens than get_current_handoff.',
+    {
+      task:  z.string().describe('Describe the task you are about to work on'),
+      scope: z.string().optional().describe('Optional file path or module to focus on (e.g. "src/auth/*")'),
+      top_k: z.number().optional().describe('Max items to return (default: 8)'),
+    },
+    async ({ task, scope, top_k }) => {
+      if (!packet) return noPacket();
+      const results = searchContext(packet, task, scope, top_k ?? 8);
+      const text = formatSearchResults(results, task);
+      return { content: [{ type: 'text' as const, text }] };
+    },
+  );
+
+  server.tool(
     'add_note',
     'Add a note to the current handoff packet from within an agent session.',
     { note: z.string().describe('The note to add to the packet') },
@@ -117,6 +134,7 @@ export async function startMCPServer(): Promise<void> {
         reason,
         related_files: files ?? [],
         confidence: 1.0,
+        added_at: new Date().toISOString(),
       });
       writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
       return { content: [{ type: 'text' as const, text: `Decision recorded: "${statement}"` }] };
@@ -132,7 +150,7 @@ export async function startMCPServer(): Promise<void> {
     },
     async ({ statement, source }) => {
       if (!packet) return noPacket();
-      packet.warnings.push({ statement, source: source ?? 'session' });
+      packet.warnings.push({ statement, source: source ?? 'session', added_at: new Date().toISOString() });
       writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
       return { content: [{ type: 'text' as const, text: `Warning recorded: "${statement}"` }] };
     },
@@ -148,7 +166,7 @@ export async function startMCPServer(): Promise<void> {
     },
     async ({ what, why_failed, recommendation }) => {
       if (!packet) return noPacket();
-      packet.failed_attempts.push({ what, why_failed, recommendation });
+      packet.failed_attempts.push({ what, why_failed, recommendation, added_at: new Date().toISOString() });
       writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
       return { content: [{ type: 'text' as const, text: `Failed attempt recorded: "${what}"` }] };
     },

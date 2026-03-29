@@ -5,23 +5,27 @@ export const DecisionSchema = z.object({
   reason: z.string().optional(),
   related_files: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(1).default(1.0),
+  added_at: z.string().optional(), // ISO timestamp when this item was added
 });
 
 export const FactSchema = z.object({
   statement: z.string(),
   source: z.string().optional(),
   related_files: z.array(z.string()).default([]),
+  added_at: z.string().optional(),
 });
 
 export const WarningSchema = z.object({
   statement: z.string(),
   source: z.string().optional(),
+  added_at: z.string().optional(),
 });
 
 export const FailedAttemptSchema = z.object({
   what: z.string(),
   why_failed: z.string(),
   recommendation: z.string().optional(),
+  added_at: z.string().optional(),
 });
 
 export const TaskStateSchema = z.object({

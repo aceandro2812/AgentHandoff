@@ -90,10 +90,11 @@ program
 program
   .command('setup')
   .description('One-time setup: auto-detect installed agents and configure MCP + slash commands for all of them')
-  .option('--force',   'Configure all agents even if not detected')
-  .option('--dry-run', 'Show what would be configured without making changes')
+  .option('--force',     'Configure all agents even if not detected')
+  .option('--dry-run',   'Show what would be configured without making changes')
+  .option('--uninstall', 'Remove AgentHandoff instruction blocks from all agent instruction files')
   .action(async (opts) => {
-    await runSetup({ force: opts.force, dryRun: opts.dryRun }).catch(die);
+    await runSetup({ force: opts.force, dryRun: opts.dryRun, uninstall: opts.uninstall }).catch(die);
   });
 
 // ── init ───────────────────────────────────────────────────────────────────

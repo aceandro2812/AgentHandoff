@@ -250,7 +250,24 @@ interface SetupResult {
   errors: string[];
 }
 
-export async function runSetup(opts: { force?: boolean; dryRun?: boolean }): Promise<void> {
+export async function runSetup(opts: { force?: boolean; dryRun?: boolean; uninstall?: boolean }): Promise<void> {
+  // Uninstall: remove instruction blocks from all instruction files
+  if (opts.uninstall) {
+    const { cleanInstructions, INSTRUCTION_AGENTS } = await import('../inject/instructions.js');
+    const projectRoot = getProjectRoot();
+    const removed: string[] = [];
+    for (const agentId of INSTRUCTION_AGENTS) {
+      const cleaned = cleanInstructions(agentId, projectRoot);
+      if (cleaned) removed.push(cleaned);
+    }
+    if (removed.length === 0) {
+      console.log(chalk.yellow('No AgentHandoff instructions found to remove.'));
+    } else {
+      console.log(chalk.green('\n✓ Removed AgentHandoff instructions from:'));
+      for (const f of removed) console.log(`  ${chalk.dim('✗')} ${f}`);
+    }
+    return;
+  }
   const projectRoot = getProjectRoot();
 
   console.log('');

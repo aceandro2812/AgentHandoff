@@ -2,6 +2,17 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
+const AGENTHANDOFF_BEGIN = '<!-- AGENTHANDOFF:BEGIN -->';
+const AGENTHANDOFF_END = '<!-- AGENTHANDOFF:END -->';
+
+/** Strip the injected AgentHandoff instruction block so it doesn't pollute packet content. */
+function stripHandoffBlock(content: string): string {
+  const begin = content.indexOf(AGENTHANDOFF_BEGIN);
+  const end = content.indexOf(AGENTHANDOFF_END);
+  if (begin === -1 || end === -1) return content;
+  return (content.substring(0, begin) + content.substring(end + AGENTHANDOFF_END.length)).trim();
+}
+
 // Tier 1: stable, user-controlled instruction files
 const INSTRUCTION_FILES: Array<{ path: string; label: string; global?: boolean }> = [
   { path: 'CLAUDE.md',                          label: 'CLAUDE.md' },
@@ -39,7 +50,7 @@ export function captureInstructionFiles(
     if (excludePaths.includes(path)) continue;
     const fullPath = join(projectRoot, path);
     if (existsSync(fullPath)) {
-      const content = readFileSync(fullPath, 'utf8').trim();
+      const content = stripHandoffBlock(readFileSync(fullPath, 'utf8').trim());
       if (content) results.push({ label, path: fullPath, content });
     }
   }
@@ -47,7 +58,7 @@ export function captureInstructionFiles(
   for (const { path, label } of GLOBAL_INSTRUCTION_FILES) {
     const fullPath = path();
     if (existsSync(fullPath)) {
-      const content = readFileSync(fullPath, 'utf8').trim();
+      const content = stripHandoffBlock(readFileSync(fullPath, 'utf8').trim());
       if (content) results.push({ label, path: fullPath, content });
     }
   }

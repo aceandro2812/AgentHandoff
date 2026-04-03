@@ -1,5 +1,5 @@
 {
-  "name": "agenthandoff",
+  "name": "@jatin_iyer09/agenthandoff",
   "version": "0.1.1",
   "description": "Trusted handoff packet system for switching context between AI coding agents",
   "type": "module",

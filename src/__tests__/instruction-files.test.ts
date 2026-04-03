@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { captureInstructionFiles } from '../capture/instruction-files.js';
@@ -10,8 +10,7 @@ const END   = '<!-- AGENTHANDOFF:END -->';
 let tmpDir: string;
 
 beforeEach(() => {
-  tmpDir = join(tmpdir(), `agenthandoff-test-${Date.now()}`);
-  mkdirSync(tmpDir, { recursive: true });
+  tmpDir = mkdtempSync(join(tmpdir(), 'agenthandoff-test-'));
 });
 
 afterEach(() => {

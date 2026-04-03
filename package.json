@@ -1,11 +1,11 @@
 {
   "name": "@jatin_iyer09/agenthandoff",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Trusted handoff packet system for switching context between AI coding agents",
   "type": "module",
   "main": "./dist/cli/index.js",
   "bin": {
-    "agenthandoff": "./dist/cli/index.js"
+    "agenthandoff": "dist/cli/index.js"
   },
   "files": [
     "dist/",
@@ -31,7 +31,18 @@
     "aider",
     "mcp"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aceandro2812/AgentHandoff"
+  },
+  "homepage": "https://github.com/aceandro2812/AgentHandoff#readme",
+  "bugs": {
+    "url": "https://github.com/aceandro2812/AgentHandoff/issues"
+  },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18.0.0"
   },

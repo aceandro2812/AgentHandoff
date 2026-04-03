@@ -3,7 +3,7 @@
 <!-- AGENTHANDOFF:BEGIN -->
 ## AgentHandoff — Autonomous Context Transfer
 
-This project has an **agenthandoff** MCP server that auto-starts with your session.
+This project uses the **agenthandoff** MCP server for context capture. The server does **not** start automatically — it must be started with `agenthandoff mcp start` before opening Gemini CLI, or configured once with `agenthandoff setup` (or `agenthandoff mcp config --for gemini`) so Gemini auto-launches it. See the README for setup steps.
 
 ### On session start
 
@@ -60,6 +60,6 @@ Rules for the packet:
 - Every failed_attempt MUST include why_failed.
 - next_action must be exact enough that the next agent starts immediately.
 - Include ALL decisions and warnings from the session, not just recent ones.
-- After writing, confirm: "Handoff ready. The target agent will pick up context automatically via MCP."
+- After writing, confirm: "Handoff ready. The target agent can pick up context via MCP (`agenthandoff mcp start`) or inline paste (`agenthandoff inline`)."
 <!-- AGENTHANDOFF:END -->
 

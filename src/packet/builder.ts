@@ -259,3 +259,47 @@ export async function buildPacket(opts: BuildOptions): Promise<BuildResult> {
 
   return { packet: finalPacket, redactedCount, sourcesUsed, warnings: buildWarnings, llmUsed };
 }
+
+/**
+ * Merge a freshly-built packet with an in-memory packet that was populated
+ * by the agent during the session (via push_decision / push_warning / etc.).
+ *
+ * Strategy: agent-pushed items take priority (they are agent-self-reported and
+ * higher quality than heuristically-extracted items). Built items fill gaps.
+ */
+export function mergePackets(built: HandoffPacket, pushed: HandoffPacket): HandoffPacket {
+  const dedupStr = <T extends { statement: string }>(priority: T[], fill: T[]): T[] => {
+    const seen = new Set(priority.map(x => x.statement));
+    return [...priority, ...fill.filter(x => !seen.has(x.statement))];
+  };
+
+  return {
+    ...built,
+    // Identity: agent-declared values win
+    source_agent: pushed.source_agent || built.source_agent,
+    target_agent: pushed.target_agent || built.target_agent,
+    // Task state: pushed wins if set
+    task_state: pushed.task_state ?? built.task_state,
+    // Dedup by statement text; pushed items first
+    decisions:      dedupStr(pushed.decisions, built.decisions).slice(0, 15),
+    facts:          dedupStr(pushed.facts, built.facts).slice(0, 20),
+    warnings:       dedupStr(pushed.warnings, built.warnings).slice(0, 10),
+    // failed_attempts dedup by 'what'
+    failed_attempts: [
+      ...pushed.failed_attempts,
+      ...built.failed_attempts.filter(b =>
+        !pushed.failed_attempts.some(p => p.what === b.what),
+      ),
+    ].slice(0, 10),
+    open_questions: [...new Set([...pushed.open_questions, ...built.open_questions])],
+    manual_notes:   [...new Set([...pushed.manual_notes, ...built.manual_notes])],
+    // Union of both file sets; pushed files first
+    related_files: [...new Set([...pushed.related_files, ...built.related_files])].slice(0, 25),
+    provenance: {
+      ...built.provenance,
+      capture_method: 'agent-self-reported',
+      sources_used: [...new Set([...pushed.provenance.sources_used, ...built.provenance.sources_used])],
+      review_status: 'approved' as const,
+    },
+  };
+}

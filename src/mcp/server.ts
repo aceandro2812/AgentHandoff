@@ -3,8 +3,10 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { existsSync, readFileSync, writeFileSync, watchFile } from 'fs';
 import { join } from 'path';
 import { z } from 'zod';
-import { getProjectRoot, getHandoffDir, PACKET_JSON } from '../utils/config.js';
-import { HandoffPacket } from '../packet/schema.js';
+import { getProjectRoot, getHandoffDir, ensureHandoffDir, getProjectId, appendAuditLog, PACKET_JSON, PACKET_MD } from '../utils/config.js';
+import { HandoffPacket, SUPPORTED_SOURCE_AGENTS, SUPPORTED_TARGET_AGENTS, SourceAgent, TargetAgent } from '../packet/schema.js';
+import { buildPacket, mergePackets } from '../packet/builder.js';
+import { renderPacketAsMarkdown } from '../packet/renderer.js';
 import {
   handleGetCurrentHandoff,
   handleGetTaskState,
@@ -31,17 +33,57 @@ function loadPacket(packetPath: string): HandoffPacket | null {
   }
 }
 
+function createMinimalPacket(projectRoot: string): HandoffPacket {
+  return {
+    schema_version: '1.0',
+    project_id: getProjectId(projectRoot),
+    project_path: projectRoot,
+    created_at: new Date().toISOString(),
+    source_agent: 'claude-code',
+    target_agent: 'generic',
+    task_state: undefined,
+    decisions: [],
+    facts: [],
+    warnings: [],
+    failed_attempts: [],
+    related_files: [],
+    open_questions: [],
+    manual_notes: [],
+    provenance: {
+      capture_method: 'agent-self-reported',
+      sources_used: [],
+      review_status: 'draft',
+    },
+  };
+}
+
 export async function startMCPServer(): Promise<void> {
   const projectRoot = getProjectRoot();
-  const packetPath = join(getHandoffDir(projectRoot), PACKET_JSON);
+  const handoffDir  = ensureHandoffDir(projectRoot);
+  const packetPath  = join(handoffDir, PACKET_JSON);
+  const mdPath      = join(handoffDir, PACKET_MD);
 
-  let packet = loadPacket(packetPath);
+  let packet: HandoffPacket | null = loadPacket(packetPath);
+  let watcherActive = existsSync(packetPath);
 
   // Live-reload when packet file changes on disk
-  if (existsSync(packetPath)) {
+  if (watcherActive) {
     watchFile(packetPath, { interval: 1000 }, () => {
       packet = loadPacket(packetPath);
     });
+  }
+
+  // Auto-initialize packet on first write — no human CLI step required.
+  // Also starts the file-watcher if it wasn't running yet.
+  function ensurePacket(): HandoffPacket {
+    if (packet) return packet;
+    packet = createMinimalPacket(projectRoot);
+    writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
+    if (!watcherActive) {
+      watchFile(packetPath, { interval: 1000 }, () => { packet = loadPacket(packetPath); });
+      watcherActive = true;
+    }
+    return packet;
   }
 
   const server = new McpServer({ name: 'agenthandoff', version: '0.1.0' });
@@ -109,7 +151,7 @@ export async function startMCPServer(): Promise<void> {
     'Add a note to the current handoff packet from within an agent session.',
     { note: z.string().describe('The note to add to the packet') },
     async ({ note }) => {
-      if (!packet) return noPacket();
+      packet = ensurePacket();
       packet.manual_notes.push(note);
       writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
       return { content: [{ type: 'text' as const, text: `Note added: "${note}"` }] };
@@ -128,7 +170,7 @@ export async function startMCPServer(): Promise<void> {
       files:     z.array(z.string()).optional().describe('Related file paths'),
     },
     async ({ statement, reason, files }) => {
-      if (!packet) return noPacket();
+      packet = ensurePacket();
       packet.decisions.push({
         statement,
         reason,
@@ -149,7 +191,7 @@ export async function startMCPServer(): Promise<void> {
       source:    z.string().optional().describe('Where this warning came from'),
     },
     async ({ statement, source }) => {
-      if (!packet) return noPacket();
+      packet = ensurePacket();
       packet.warnings.push({ statement, source: source ?? 'session', added_at: new Date().toISOString() });
       writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
       return { content: [{ type: 'text' as const, text: `Warning recorded: "${statement}"` }] };
@@ -165,7 +207,7 @@ export async function startMCPServer(): Promise<void> {
       recommendation: z.string().optional().describe('What to try instead'),
     },
     async ({ what, why_failed, recommendation }) => {
-      if (!packet) return noPacket();
+      packet = ensurePacket();
       packet.failed_attempts.push({ what, why_failed, recommendation, added_at: new Date().toISOString() });
       writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
       return { content: [{ type: 'text' as const, text: `Failed attempt recorded: "${what}"` }] };
@@ -182,10 +224,129 @@ export async function startMCPServer(): Promise<void> {
       blocked_on:   z.string().optional().describe('What is blocking progress, if anything'),
     },
     async ({ goal, current_step, next_action, blocked_on }) => {
-      if (!packet) return noPacket();
+      packet = ensurePacket();
       packet.task_state = { goal, current_step, next_action, blocked_on };
       writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
       return { content: [{ type: 'text' as const, text: `Task state updated: "${goal}"` }] };
+    },
+  );
+
+  // ── initialize_handoff ────────────────────────────────────────────────────
+  // Call this at session start to declare identity and goal.
+  // Works even with no pre-existing packet — creates one automatically.
+  server.tool(
+    'initialize_handoff',
+    'Start a new handoff session. Declare your agent identity and the target agent. Safe to call at any time — creates the packet if it does not exist, or updates identity fields if it does.',
+    {
+      source_agent: z.enum(SUPPORTED_SOURCE_AGENTS).describe('The agent starting this session (e.g. "claude-code")'),
+      target_agent: z.enum(SUPPORTED_TARGET_AGENTS).describe('The agent that will receive the handoff (e.g. "codex")'),
+      goal: z.string().optional().describe('Top-level goal for this session'),
+    },
+    async ({ source_agent, target_agent, goal }) => {
+      packet = ensurePacket();
+      packet.source_agent = source_agent;
+      packet.target_agent = target_agent;
+      packet.created_at   = new Date().toISOString();
+      if (goal) packet.task_state = { ...packet.task_state, goal };
+      writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
+      appendAuditLog(projectRoot, `initialize_handoff: ${source_agent} → ${target_agent}`);
+      return { content: [{ type: 'text' as const, text:
+        `Handoff initialized: ${source_agent} → ${target_agent}` +
+        (goal ? `\nGoal: ${goal}` : '') +
+        '\n\nPush context as you work:\n  push_decision / push_warning / push_failed_attempt / add_fact / set_task_state\n\nWhen ready to hand off:\n  build_handoff',
+      }] };
+    },
+  );
+
+  // ── add_fact ──────────────────────────────────────────────────────────────
+  server.tool(
+    'add_fact',
+    'Record a factual observation about the codebase or project state. Use for things that are true and useful for the next agent to know, but are not decisions or warnings.',
+    {
+      statement:     z.string().describe('The fact to record'),
+      related_files: z.array(z.string()).optional().describe('Files this fact relates to'),
+    },
+    async ({ statement, related_files }) => {
+      packet = ensurePacket();
+      packet.facts.push({
+        statement,
+        source:        'agent-session',
+        related_files: related_files ?? [],
+        added_at:      new Date().toISOString(),
+      });
+      writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
+      return { content: [{ type: 'text' as const, text: `Fact recorded: "${statement}"` }] };
+    },
+  );
+
+  // ── add_open_question ─────────────────────────────────────────────────────
+  server.tool(
+    'add_open_question',
+    'Record an unresolved question for the next agent to investigate.',
+    {
+      question: z.string().describe('The open question to record'),
+    },
+    async ({ question }) => {
+      packet = ensurePacket();
+      packet.open_questions.push(question);
+      writeFileSync(packetPath, JSON.stringify(packet, null, 2), 'utf8');
+      return { content: [{ type: 'text' as const, text: `Open question recorded: "${question}"` }] };
+    },
+  );
+
+  // ── build_handoff ─────────────────────────────────────────────────────────
+  // The core autonomous tool. Captures git state, session history, and
+  // instruction files, then merges with everything pushed during this session.
+  // Writes both current-handoff.json and current-handoff.md.
+  server.tool(
+    'build_handoff',
+    'Finalize and write the complete handoff packet. Captures git state, session history, and project instruction files automatically, then merges with every decision/warning/fact you pushed during this session. Call this when you are ready to hand off to another agent. No CLI command needed.',
+    {
+      target_agent: z.enum(SUPPORTED_TARGET_AGENTS).optional().describe('Override the target agent (default: whatever was set in initialize_handoff, or "generic")'),
+      use_llm:      z.boolean().optional().describe('Use LLM compression for smarter extraction (requires ANTHROPIC_API_KEY or OPENAI_API_KEY)'),
+    },
+    async ({ target_agent, use_llm }) => {
+      const pushed = packet; // snapshot current in-memory state
+      const srcAgent = (pushed?.source_agent ?? 'claude-code') as SourceAgent;
+      const tgtAgent = (target_agent ?? pushed?.target_agent ?? 'generic') as TargetAgent;
+
+      let buildResult;
+      try {
+        buildResult = await buildPacket({
+          projectRoot,
+          sourceAgent: srcAgent,
+          targetAgent: tgtAgent,
+          useLLM: use_llm ?? false,
+        });
+      } catch (e) {
+        return { content: [{ type: 'text' as const, text: `Build failed: ${e instanceof Error ? e.message : String(e)}` }], isError: true };
+      }
+
+      const merged = pushed
+        ? mergePackets(buildResult.packet, pushed)
+        : buildResult.packet;
+
+      writeFileSync(packetPath, JSON.stringify(merged, null, 2), 'utf8');
+      writeFileSync(mdPath, renderPacketAsMarkdown(merged), 'utf8');
+      packet = merged;
+      appendAuditLog(projectRoot, `build_handoff via MCP: ${srcAgent} → ${tgtAgent} (llm=${use_llm ?? false})`);
+
+      const warnings = buildResult.warnings.length
+        ? `\nBuild warnings:\n${buildResult.warnings.map(w => `  ⚠ ${w}`).join('\n')}`
+        : '';
+
+      return { content: [{ type: 'text' as const, text:
+        `Handoff built and written.\n` +
+        `  Decisions:      ${merged.decisions.length}\n` +
+        `  Facts:          ${merged.facts.length}\n` +
+        `  Warnings:       ${merged.warnings.length}\n` +
+        `  Failed attempts:${merged.failed_attempts.length}\n` +
+        `  Related files:  ${merged.related_files.length}\n` +
+        `  Sources used:   ${buildResult.sourcesUsed.join(', ') || 'none'}` +
+        warnings +
+        `\n\nFiles written:\n  ${packetPath}\n  ${mdPath}` +
+        `\n\nThe next agent can read context with get_current_handoff or get_context_for_task.`,
+      }] };
     },
   );
 

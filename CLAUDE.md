@@ -14,7 +14,7 @@ Use **jcodemunch-mcp** for all code lookups. Never read full files when MCP is a
 <!-- AGENTHANDOFF:BEGIN -->
 ## AgentHandoff — Autonomous Context Transfer
 
-This project has an **agenthandoff** MCP server that auto-starts with your session. Use it to build up handoff context as you work, so switching to another agent (Codex, Cursor, Gemini, etc.) is seamless.
+This project uses the **agenthandoff** MCP server for real-time context capture. The server does **not** start automatically on its own — it is launched by your agent only if `agenthandoff setup` (or `agenthandoff mcp config --for claude-code`) was run first to write the MCP config into `.mcp.json`. If MCP tools are unavailable, the server can be started manually with `agenthandoff mcp start`. See the [MCP Setup](#mcp-setup) section in the README for full setup steps.
 
 ### During your session — push context automatically
 
@@ -69,10 +69,9 @@ Rules for the packet:
 - Every failed_attempt MUST include why_failed.
 - next_action must be exact enough that the next agent starts immediately.
 - Include ALL decisions and warnings from the session, not just recent ones.
-- After writing, confirm: "Handoff ready. The target agent will pick up context automatically via MCP."
+- After writing, confirm: "Handoff ready. The target agent can pick up context via MCP (`agenthandoff mcp start`) or inline paste (`agenthandoff inline`)."
 
 ### On session start — check for incoming handoff
 
 At the start of this session, call `get_task_state` from the agenthandoff MCP server. If a handoff packet exists from a previous agent, acknowledge the context and continue from where the previous agent left off. If no packet exists, proceed normally.
 <!-- AGENTHANDOFF:END -->
-

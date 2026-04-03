@@ -61,15 +61,16 @@ function writeClaudeCodeConfig(
   projectRoot: string,
   server: { command: string; args: string[] },
 ): string[] {
-  const configPath = join(projectRoot, '.claude', 'settings.json');
-  mkdirSync(join(projectRoot, '.claude'), { recursive: true });
+  // Claude Code reads project-scoped MCP servers from .mcp.json at the project root.
+  // It does NOT read mcpServers from .claude/settings.json.
+  const configPath = join(projectRoot, '.mcp.json');
 
-  let existing: { mcpServers?: Record<string, unknown> } = {};
+  let existing: MCPConfig = { mcpServers: {} };
   if (existsSync(configPath)) {
     try { existing = JSON.parse(readFileSync(configPath, 'utf8')); } catch { /**/ }
   }
 
-  existing.mcpServers = { ...existing.mcpServers, agenthandoff: server };
+  existing.mcpServers['agenthandoff'] = server;
   writeFileSync(configPath, JSON.stringify(existing, null, 2), 'utf8');
   return [configPath];
 }
@@ -95,17 +96,39 @@ function writeCodexConfig(
   _projectRoot: string,
   server: { command: string; args: string[] },
 ): string[] {
-  const configPath = join(homedir(), '.codex', 'config.json');
+  // Codex CLI uses TOML format at ~/.codex/config.toml with [mcp_servers.<name>] tables.
+  // It does NOT read from config.json.
+  const configPath = join(homedir(), '.codex', 'config.toml');
   mkdirSync(join(homedir(), '.codex'), { recursive: true });
 
-  let existing: { mcpServers?: Record<string, unknown> } = {};
-  if (existsSync(configPath)) {
-    try { existing = JSON.parse(readFileSync(configPath, 'utf8')); } catch { /**/ }
+  const existing = existsSync(configPath) ? readFileSync(configPath, 'utf8') : '';
+  writeFileSync(configPath, upsertTomlMcpServer(existing, 'agenthandoff', server), 'utf8');
+  return [configPath];
+}
+
+/**
+ * Upsert an [mcp_servers.<name>] section in a TOML string.
+ * Replaces an existing section if found, otherwise appends it.
+ */
+function upsertTomlMcpServer(
+  toml: string,
+  name: string,
+  server: { command: string; args: string[] },
+): string {
+  const argsToml = '[' + server.args.map(a => JSON.stringify(a)).join(', ') + ']';
+  const newSection = `[mcp_servers.${name}]\ncommand = ${JSON.stringify(server.command)}\nargs = ${argsToml}`;
+
+  // Match the section header through to the next section header (or EOF)
+  const sectionRe = new RegExp(
+    `\\[mcp_servers\\.${name}\\][^\\[]*`,
+    's',
+  );
+
+  if (sectionRe.test(toml)) {
+    return toml.replace(sectionRe, newSection + '\n');
   }
 
-  existing.mcpServers = { ...existing.mcpServers, agenthandoff: server };
-  writeFileSync(configPath, JSON.stringify(existing, null, 2), 'utf8');
-  return [configPath];
+  return toml.trimEnd() + (toml.trim() ? '\n\n' : '') + newSection + '\n';
 }
 
 function writeGeminiConfig(
@@ -130,32 +153,20 @@ function writeCopilotConfig(
   projectRoot: string,
   server: { command: string; args: string[] },
 ): string[] {
-  const written: string[] = [];
-
-  // VS Code Copilot reads MCP from .vscode/mcp.json (per-workspace)
+  // VS Code Copilot reads MCP from .vscode/mcp.json (per-workspace).
+  // The top-level key is "servers" (not "mcpServers"), and each entry requires "type": "stdio".
   const vscodePath = join(projectRoot, '.vscode', 'mcp.json');
   mkdirSync(join(projectRoot, '.vscode'), { recursive: true });
 
-  let vscodeExisting: MCPConfig = { mcpServers: {} };
+  let existing: { servers?: Record<string, unknown> } = { servers: {} };
   if (existsSync(vscodePath)) {
-    try { vscodeExisting = JSON.parse(readFileSync(vscodePath, 'utf8')); } catch { /**/ }
+    try { existing = JSON.parse(readFileSync(vscodePath, 'utf8')); } catch { /**/ }
   }
-  vscodeExisting.mcpServers['agenthandoff'] = server;
-  writeFileSync(vscodePath, JSON.stringify(vscodeExisting, null, 2), 'utf8');
-  written.push(vscodePath);
 
-  // Copilot CLI reads MCP from ~/.copilot/mcp-config.json (persistent)
-  const copilotDir = join(homedir(), '.copilot');
-  const copilotPath = join(copilotDir, 'mcp-config.json');
-  mkdirSync(copilotDir, { recursive: true });
-
-  let copilotExisting: MCPConfig = { mcpServers: {} };
-  if (existsSync(copilotPath)) {
-    try { copilotExisting = JSON.parse(readFileSync(copilotPath, 'utf8')); } catch { /**/ }
-  }
-  copilotExisting.mcpServers['agenthandoff'] = server;
-  writeFileSync(copilotPath, JSON.stringify(copilotExisting, null, 2), 'utf8');
-  written.push(copilotPath);
-
-  return written;
+  existing.servers = {
+    ...existing.servers,
+    agenthandoff: { type: 'stdio', ...server },
+  };
+  writeFileSync(vscodePath, JSON.stringify(existing, null, 2), 'utf8');
+  return [vscodePath];
 }

@@ -1,6 +1,4 @@
-{
-  "enableAllProjectMcpServers": true,
-"mcpServers": {
+{"mcpServers": {
     "agenthandoff": {
       "command": "C:\\Users\\jatin\\AppData\\Roaming\\npm\\agenthandoff",
       "args": [

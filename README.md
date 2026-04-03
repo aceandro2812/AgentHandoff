@@ -15,6 +15,7 @@ AgentHandoff fixes this. The source agent writes a structured handoff packet fro
 - [How It Works](#how-it-works)
 - [Install](#install)
 - [One-Time Setup](#one-time-setup)
+- [MCP Setup](#mcp-setup)
 - [Daily Workflow](#daily-workflow)
 - [Agent-Specific Guides](#agent-specific-guides)
 - [MCP Server Reference](#mcp-server-reference)
@@ -24,6 +25,8 @@ AgentHandoff fixes this. The source agent writes a structured handoff packet fro
 - [Safety Design](#safety-design)
 - [Troubleshooting](#troubleshooting)
 - [Adding a New Agent](#adding-a-new-agent)
+- [Known Gaps & Limitations](#known-gaps--limitations)
+- [Testing Guide](#testing-guide)
 - [Architecture](#architecture)
 
 ---
@@ -89,7 +92,7 @@ npm link        # makes `agenthandoff` available globally
 ### Verify
 
 ```bash
-agenthandoff --version   # 0.1.0
+agenthandoff --version   # should print the installed version
 agenthandoff agents      # list supported agents
 ```
 
@@ -161,6 +164,201 @@ agenthandoff mcp config --for claude-code   # MCP config only
 agenthandoff mcp config --for codex
 agenthandoff mcp config --for all
 ```
+
+---
+
+## MCP Setup
+
+MCP lets the receiving agent query context on-demand (50–200 tokens) instead of re-reading files. **The MCP server does not start automatically when you install agenthandoff.** You must configure it once per machine/project so your agent knows how to launch it.
+
+### Step 1 — Write the MCP config
+
+Run `setup` to auto-detect and configure all installed agents at once:
+
+```bash
+agenthandoff setup
+```
+
+Or configure a specific agent:
+
+```bash
+agenthandoff mcp config --for claude-code
+agenthandoff mcp config --for codex
+agenthandoff mcp config --for cursor
+agenthandoff mcp config --for copilot     # VS Code + GitHub Copilot
+agenthandoff mcp config --for gemini
+agenthandoff mcp config --for all         # all supported agents
+```
+
+### Step 2 — Start the server (if your agent does not auto-launch it)
+
+Agents that support MCP auto-launch (Claude Code, Codex, Cursor, VS Code Copilot, Gemini CLI) will launch `agenthandoff mcp start` automatically once their config is written. For other cases, or to test manually:
+
+```bash
+agenthandoff mcp start &   # background
+```
+
+> **Note:** The server uses stdio transport. It must be running before any agent tries to call MCP tools.
+
+---
+
+### Per-agent MCP config
+
+#### Claude Code
+
+**Config file written to:** `.mcp.json` (project-level)
+
+```json
+{
+  "mcpServers": {
+    "agenthandoff": {
+      "command": "agenthandoff",
+      "args": ["mcp", "start"]
+    }
+  }
+}
+```
+
+**Setup:**
+
+```bash
+agenthandoff mcp config --for claude-code
+```
+
+Claude Code reads `.mcp.json` when you open the project and launches the server automatically. No further steps needed.
+
+**Verify it is working:** Open the project in Claude Code and ask: *"Call get_task_state from the agenthandoff MCP server."* If the server is not running you will see a connection error — re-run `agenthandoff mcp config --for claude-code` and restart Claude Code.
+
+---
+
+#### OpenAI Codex CLI
+
+**Config file written to:** `~/.codex/config.toml` (global)
+
+```toml
+[mcp_servers.agenthandoff]
+command = "agenthandoff"
+args = ["mcp", "start"]
+```
+
+**Setup:**
+
+```bash
+agenthandoff mcp config --for codex
+```
+
+Codex reads `~/.codex/config.toml` at startup and launches the server. Because Codex does not query MCP tools on its own, add this to your session-start prompt:
+
+```
+Call get_task_state from the agenthandoff MCP server to understand what was worked on previously.
+```
+
+---
+
+#### VS Code (GitHub Copilot)
+
+One config file is written for the current VS Code workspace:
+
+| File | Scope |
+|------|-------|
+| `.vscode/mcp.json` | Workspace (VS Code reads this per-project) |
+
+```json
+{
+  "servers": {
+    "agenthandoff": {
+      "type": "stdio",
+      "command": "agenthandoff",
+      "args": ["mcp", "start"]
+    }
+  }
+}
+```
+
+**Setup:**
+
+```bash
+agenthandoff mcp config --for copilot
+```
+
+VS Code reads `.vscode/mcp.json` automatically when you open the workspace with the GitHub Copilot extension installed. Make sure **MCP support is enabled** in VS Code settings (`"chat.mcp.enabled": true`). `agenthandoff mcp config --for copilot` does not write a separate `~/.copilot/` global config file.
+
+---
+
+#### Cursor
+
+**Config file written to:** `.cursor/mcp.json` (project-level)
+
+```json
+{
+  "mcpServers": {
+    "agenthandoff": {
+      "command": "agenthandoff",
+      "args": ["mcp", "start"]
+    }
+  }
+}
+```
+
+**Setup:**
+
+```bash
+agenthandoff mcp config --for cursor
+```
+
+Cursor reads `.cursor/mcp.json` when you open the project. The `agenthandoff` server will appear in Cursor's MCP server list. To query context, ask in Composer or Chat:
+
+```
+Use get_task_state from agenthandoff to see what was worked on last.
+```
+
+---
+
+#### Gemini CLI
+
+**Config file written to:** `.gemini/settings.json` (project-level)
+
+```json
+{
+  "mcpServers": {
+    "agenthandoff": {
+      "command": "agenthandoff",
+      "args": ["mcp", "start"]
+    }
+  }
+}
+```
+
+**Setup:**
+
+```bash
+agenthandoff mcp config --for gemini
+```
+
+Gemini CLI reads `.gemini/settings.json` when started in the project directory and launches the server.
+
+---
+
+### MCP tools reference
+
+| Tool | What it returns | Approx tokens |
+|------|----------------|---------------|
+| `get_task_state` | Current goal, step, next action, blockers | ~50 |
+| `get_decisions` | Architectural decisions + rationale | ~150 |
+| `get_warnings` | Constraints and things to avoid | ~100 |
+| `get_related_files` | Key files for the current task | ~30 |
+| `get_summary` | Brief overview of the packet | ~20 |
+| `get_current_handoff` | Full packet as markdown | ~400 |
+| `get_context_for_task` | Ranked subset for a specific task | ~80 |
+| `add_note` | Add a note to the packet | — |
+| `push_decision` | Record a decision in real-time | — |
+| `push_warning` | Record a warning in real-time | — |
+| `push_failed_attempt` | Record a failed approach | — |
+| `set_task_state` | Update goal / step / next action | — |
+| `initialize_handoff` | Start or re-target a handoff session | — |
+| `add_fact` | Record a factual project observation | — |
+| `add_open_question` | Record an unresolved question | — |
+| `build_handoff` | Build and merge the full packet through MCP | — |
 
 ---
 
@@ -293,7 +491,7 @@ agenthandoff clean     # remove all injected artifacts (full rollback)
 
 Claude reads its entire session context and writes the packet directly using the Write tool. The packet is `approved` by default (self-generated, no extra review needed).
 
-**MCP config written to:** `.claude/settings.json`
+**MCP config written to:** `.mcp.json`
 
 ```json
 {
@@ -306,7 +504,9 @@ Claude reads its entire session context and writes the packet directly using the
 }
 ```
 
-Claude Code will auto-start the MCP server when you open the project. Available tools: `get_task_state`, `get_decisions`, `get_warnings`, `get_related_files`, `get_summary`, `get_current_handoff`, `add_note`, `push_decision`, `push_warning`, `push_failed_attempt`, `set_task_state`.
+Once the config is in place, Claude Code launches the MCP server automatically when you open the project (it reads `mcpServers` from `.mcp.json`). **You must run `agenthandoff setup` or `agenthandoff mcp config --for claude-code` first** — this is a one-time step per machine/project. See [MCP Setup](#mcp-setup) for details.
+
+Available tools: `get_current_handoff`, `get_task_state`, `get_decisions`, `get_warnings`, `get_related_files`, `get_summary`, `get_context_for_task`, `add_note`, `push_decision`, `push_warning`, `push_failed_attempt`, `set_task_state`, `initialize_handoff`, `add_fact`, `add_open_question`, `build_handoff`.
 
 **Best practice — push during the session:**
 
@@ -331,20 +531,15 @@ set_task_state({ goal: "...", next_action: "..." })
 /handoff cursor
 ```
 
-**MCP config written to:** `~/.codex/config.json`
+**MCP config written to:** `~/.codex/config.toml`
 
-```json
-{
-  "mcpServers": {
-    "agenthandoff": {
-      "command": "agenthandoff",
-      "args": ["mcp", "start"]
-    }
-  }
-}
+```toml
+[mcp_servers.agenthandoff]
+command = "agenthandoff"
+args = ["mcp", "start"]
 ```
 
-Codex connects to the MCP server at startup and calls `get_task_state` automatically.
+Once configured, Codex reads `~/.codex/config.toml` at startup and launches the MCP server automatically. **You must run `agenthandoff setup` or `agenthandoff mcp config --for codex` first.** Codex does not call any MCP tools on its own — prompt it to call `get_task_state` at the start of the session.
 
 **Receiving a handoff from Claude Code:**
 
@@ -602,6 +797,7 @@ The server uses stdio transport and live-reloads the packet when it changes on d
 | `get_related_files` | Key files for the current task | ~40 |
 | `get_summary` | Item counts + current goal | ~60 |
 | `get_current_handoff` | Full packet as markdown | ~1500 |
+| `get_context_for_task` | Ranked subset for a specific task | ~80 |
 
 ### Write tools (source agent calls these during session)
 
@@ -612,6 +808,10 @@ The server uses stdio transport and live-reloads the packet when it changes on d
 | `push_failed_attempt` | Record an approach that failed and why |
 | `set_task_state` | Update goal, current step, next action |
 | `add_note` | Add a general note |
+| `initialize_handoff` | Set source agent, target agent, and initial goal |
+| `add_fact` | Record a factual project observation |
+| `add_open_question` | Record an unresolved question for follow-up |
+| `build_handoff` | Build and merge the full packet through MCP |
 
 **Example — Claude calls these during a session:**
 
@@ -829,9 +1029,10 @@ agenthandoff inject --to codex --force
 
 ```bash
 # Verify config was written:
-cat .claude/settings.json          # for Claude Code
+cat .mcp.json                      # for Claude Code
 cat .cursor/mcp.json               # for Cursor
-cat ~/.codex/config.json           # for Codex
+cat ~/.codex/config.toml           # for Codex
+cat .vscode/mcp.json               # for VS Code Copilot
 
 # Test the server manually:
 agenthandoff mcp start             # should start without error
@@ -905,7 +1106,385 @@ Submit a PR with all five files and a test with a sample project.
 
 ---
 
-## Architecture
+## Known Gaps & Limitations
+
+### Gap 1 — Way 2 is "shared file" not "live pipe"
+
+The original vision had two handoff modes:
+
+> **Way 1**: Start a *new* session in the target agent with full context pre-loaded.
+> **Way 2**: You are *already mid-session* in the target agent, you ask it to "contact Claude Code" and pull context live.
+
+**Way 1 is fully implemented.** Way 2 works, but not quite the way the vision described it.
+
+**What actually happens in Way 2:**
+
+The MCP server does NOT connect directly to a running Claude Code process. Instead, both agents share a JSON file on disk (`.agenthandoff/current-handoff.json`) as a blackboard:
+
+```
+┌──────────────────┐        push_decision()        ┌────────────────────────┐
+│   Claude Code    │  ─────────────────────────►  │  current-handoff.json  │
+│  (source agent)  │  push_warning()               │  (shared blackboard)   │
+│                  │  set_task_state()             │                        │
+│                  │                               │  live-reloaded every   │
+│                  │                               │  1 second by MCP server│
+└──────────────────┘                               └───────────┬────────────┘
+                                                               │
+                                                  get_task_state()
+                                                  get_decisions()
+                                                               │
+                                               ┌──────────────▼─────────────┐
+                                               │        Codex / Gemini      │
+                                               │     (target agent, MCP)    │
+                                               └────────────────────────────┘
+```
+
+This is effectively live if Claude Code's CLAUDE.md instructions are active (Claude calls `push_*` tools proactively during its session), but:
+
+- If Claude Code has not pushed anything yet, Codex gets no context
+- It is not a direct process-to-process connection — it is a file on disk
+- There is no on-demand "refresh now from the source agent's current window" mechanism
+
+**Impact:** Medium. In practice, the CLAUDE.md autonomous instructions push context continuously so the blackboard is usually up to date. However the illusion of "Codex calling Claude Code" is not literal.
+
+**Workaround until a proper fix:**
+
+If Codex asks for context and the packet seems stale, ask Claude Code directly inside its session:
+
+```
+# In Claude Code:
+push the current task state and any decisions made so far to the handoff packet
+```
+
+Claude calls `set_task_state` and `push_decision` via MCP, Codex's `get_task_state` immediately returns fresh data.
+
+---
+
+### Gap 2 — `captureClaudeSession` reads past sessions, not the live window
+
+`agenthandoff build --from claude-code` reads the most recent `.jsonl` file from `~/.claude/projects/<hash>/`. This file is written periodically by Claude Code, not on every message. If you run `build` mid-session, the last few messages may not be in the file yet.
+
+**Impact:** Low when using slash commands (`/project:handoff codex`), because the slash command asks Claude to write the packet from its *live* context window. Impact is higher when using `agenthandoff build` as a standalone CLI call without the slash command.
+
+**Workaround:** Always prefer `/project:handoff <target>` inside Claude Code over `agenthandoff build` from the terminal. The slash command bypasses the JSONL entirely.
+
+---
+
+### Gap 3 — Session capture is Claude Code only
+
+`src/capture/` has a deep JSONL parser for Claude Code. For Cursor, Windsurf, Codex, and Gemini the only Tier 1 sources are instruction files (`.cursorrules`, `AGENTS.md`, etc.) and git state. There is no equivalent session history reader for those agents.
+
+**Impact:** Handoffs *from* Cursor/Codex/Windsurf contain less context than handoffs *from* Claude Code. The slash command mitigates this (any agent with a slash command can self-report its context), but agents that don't reliably invoke slash commands will produce thin packets.
+
+**Workaround:** Use `agenthandoff add` to manually enrich the packet after `build`:
+
+```bash
+agenthandoff build --from cursor --to claude-code
+agenthandoff add --decision "Changed auth strategy from sessions to JWTs"
+agenthandoff add --warning  "Prisma migration pending — do not run prod deploy yet"
+```
+
+---
+
+### Gap 4 — MCP server must be configured before first use
+
+The MCP server does not start automatically when you install agenthandoff. First-time users must run `agenthandoff setup` (or `agenthandoff mcp config --for <agent>`) to write the correct agent-specific MCP config. Once that config exists, the agent launches `agenthandoff mcp start` automatically at startup.
+
+**Impact:** Confusing for first-time users who expect MCP to work immediately after `npm install -g agenthandoff`.
+
+**Resolution:** See the [MCP Setup](#mcp-setup) section for per-agent setup instructions. If an agent is not launching the server, re-run `agenthandoff mcp config --for <agent>` and restart the agent.
+
+---
+
+## Testing Guide
+
+### Prerequisites
+
+```bash
+# Build from source
+git clone https://github.com/your-org/agenthandoff
+cd agenthandoff
+npm install
+npm run build
+npm link        # makes `agenthandoff` available globally
+
+# Verify
+agenthandoff --version   # should print the installed version
+```
+
+---
+
+### Unit Tests
+
+```bash
+npm test              # run all tests once
+npm run test:watch    # re-run on file change
+```
+
+**What is covered:**
+
+| Test file | What it tests |
+|-----------|---------------|
+| `src/__tests__/schema.test.ts` | Zod schema validation — valid + invalid packets |
+| `src/__tests__/redact.test.ts` | Secret redaction — AWS keys, GitHub tokens, API keys, PEM blocks |
+| `src/__tests__/search.test.ts` | Semantic search — `get_context_for_task` ranking |
+| `src/__tests__/instruction-files.test.ts` | Instruction file capture — CLAUDE.md, AGENTS.md parsing |
+
+**Run a single test file:**
+
+```bash
+npx vitest run src/__tests__/redact.test.ts
+```
+
+---
+
+### Manual Testing — Way 1 (New session with injected context)
+
+This tests the full CLI pipeline: build → preview → inject → receive.
+
+**Step 1 — Simulate a Claude Code session with manual notes**
+
+```bash
+# Create a test project directory
+mkdir /tmp/test-project && cd /tmp/test-project
+git init && echo "# Test" > README.md && git add . && git commit -m "init"
+
+# Add some context as if Claude Code worked here
+agenthandoff add --decision "Using ESM modules — never use require()"
+agenthandoff add --warning  "Do not run migrations without a DB backup"
+agenthandoff add --note     "Halfway through implementing JWT auth refresh"
+agenthandoff add --failed   "Tried Redis for token blacklist — 180ms P99 latency"
+```
+
+**Step 2 — Build the packet**
+
+```bash
+agenthandoff build --from claude-code --to codex
+# Expected: "✓ Handoff packet built"
+# Sources: manual-notes (JSONL may be empty in test env)
+```
+
+**Step 3 — Preview the packet**
+
+```bash
+agenthandoff preview
+# Should print structured markdown with task_state, decisions, warnings, failed_attempts
+```
+
+**Step 4 — Check the status**
+
+```bash
+agenthandoff status
+# Should show item counts and review_status: draft
+```
+
+**Step 5 — Approve and inject**
+
+```bash
+agenthandoff approve
+agenthandoff inject --to codex
+# Expected: "Handoff context written to: .agenthandoff/codex-handoff.md"
+# Expected: instruction printed — "codex "Read .agenthandoff/codex-handoff.md first...""
+```
+
+**Step 6 — Verify the output file**
+
+```bash
+cat .agenthandoff/codex-handoff.md
+# Should contain: task state, decisions, warnings, failed attempts
+```
+
+**Step 7 — Test inline mode**
+
+```bash
+agenthandoff inline
+# Should print a ~68-token compressed block like:
+# [HANDOFF claude-code→codex | 2026-03-29]
+# warn: Do not run migrations without a DB backup
+# failed: Tried Redis for token blacklist — 180ms P99 latency
+# [/HANDOFF]
+```
+
+**Step 8 — Test other targets**
+
+```bash
+agenthandoff inject --to gemini
+cat .agenthandoff/gemini-handoff.md
+
+agenthandoff inject --to cursor
+cat .cursor/rules/agenthandoff.mdc   # Cursor writes here
+```
+
+---
+
+### Manual Testing — Way 2 (Mid-session MCP pull)
+
+This tests the MCP server: start → push context → query from another terminal.
+
+**Step 1 — Start the MCP server in the background**
+
+```bash
+cd /tmp/test-project
+agenthandoff mcp start &
+# Server should start silently (stdio transport — no port output is correct)
+```
+
+**Step 2 — Test MCP tools using the MCP inspector (recommended)**
+
+Install the official MCP inspector:
+
+```bash
+npx @modelcontextprotocol/inspector agenthandoff mcp start
+# Opens a browser UI at http://localhost:5173
+# You can call each tool and see the response
+```
+
+Tools to test in the inspector:
+
+| Tool | Expected response |
+|------|-------------------|
+| `get_summary` | Item counts + source agent + goal |
+| `get_task_state` | Goal, current_step, next_action |
+| `get_decisions` | List of decisions with rationale |
+| `get_warnings` | List of warnings |
+| `get_related_files` | Modified + session-edited files |
+| `get_current_handoff` | Full packet as markdown |
+| `get_context_for_task` | Pass `task: "auth refresh"` → ranked results |
+
+**Step 3 — Test live push tools**
+
+In the MCP inspector, call:
+
+```json
+push_decision({
+  "statement": "Using short-lived JWTs, not sessions",
+  "reason": "Stateless — no server-side session store needed",
+  "files": ["src/auth/tokens.ts"]
+})
+```
+
+Then call `get_decisions` — the new decision should appear immediately.
+
+```json
+set_task_state({
+  "goal": "Implement JWT refresh endpoint",
+  "current_step": "Stub done, need rotation logic",
+  "next_action": "Implement rotateTokens() at src/auth/tokens.ts:45"
+})
+```
+
+Then call `get_task_state` — should return the updated state.
+
+**Step 4 — Test live reload**
+
+Edit `.agenthandoff/current-handoff.json` directly (add a warning manually). Within 1 second, `get_warnings` should return the new warning — the server hot-reloads on file change.
+
+---
+
+### Manual Testing — `agenthandoff setup`
+
+```bash
+cd /tmp/test-project
+
+# Dry-run first (no changes made):
+agenthandoff setup --dry-run
+
+# Full setup:
+agenthandoff setup
+
+# Verify MCP config was written:
+cat .mcp.json                    # should contain agenthandoff mcpServers block
+cat .cursor/mcp.json             # if Cursor detected
+cat ~/.codex/config.toml         # if Codex detected
+cat .vscode/mcp.json             # if Copilot detected
+
+# Verify instruction files were updated:
+cat CLAUDE.md                    # should contain AgentHandoff instructions block
+cat AGENTS.md                    # same
+
+# Test uninstall:
+agenthandoff setup --uninstall
+cat CLAUDE.md                    # AgentHandoff block should be removed
+```
+
+---
+
+### Manual Testing — Secret Redaction
+
+```bash
+cd /tmp/test-project
+
+agenthandoff add --decision "DB url is postgres://admin:s3cr3tP@ss@prod.db:5432/mydb"
+agenthandoff add --warning  "API key is sk-ant-api03-FAKE000000000000000000000000000000000000000000"
+agenthandoff build --from claude-code --to codex
+agenthandoff preview
+
+# Both entries above should show [REDACTED] — never the raw secret
+```
+
+---
+
+### Manual Testing — `agenthandoff eval`
+
+```bash
+cd /tmp/test-project
+agenthandoff build --from claude-code --to codex
+agenthandoff eval
+
+# Should print a 3-row token comparison:
+# Cold start      ████████  ~11,800 tokens
+# Manual summary  ██████    ~7,200 tokens
+# AgentHandoff    ██        ~2,000 tokens (file inject)
+# AgentHandoff    ░          ~68 tokens (inline)
+```
+
+---
+
+### Manual Testing — `agenthandoff diff`
+
+```bash
+# Make a change and rebuild:
+agenthandoff add --decision "Added rate limiting to /auth/refresh — 10 req/min"
+agenthandoff build --from claude-code --to codex
+
+agenthandoff diff
+# Should show what changed between the previous and current packet
+```
+
+---
+
+### End-to-End Test with Real Claude Code
+
+This is the highest-fidelity test of the full system.
+
+1. Open a real project in Claude Code
+2. Work on something for a few minutes (edit files, ask Claude to make decisions)
+3. Inside Claude Code, run: `/project:handoff codex`
+4. Claude writes `.agenthandoff/current-handoff.json` and `.agenthandoff/current-handoff.md`
+5. In a terminal: `agenthandoff preview` — verify the context is accurate
+6. Start Codex: `codex "Read .agenthandoff/codex-handoff.md first, then tell me what the previous agent was working on."`
+7. Codex should accurately describe the task, decisions, and warnings Claude established
+
+**Verification checklist:**
+- [ ] `task_state.goal` matches what you were working on
+- [ ] `decisions` include choices Claude made (libraries, patterns, approaches)
+- [ ] `warnings` include any "don't do X" statements made during the session
+- [ ] `related_files` includes files that were actually edited
+- [ ] No raw secrets appear in the packet
+
+---
+
+### Troubleshooting Tests
+
+| Symptom | Command to diagnose |
+|---------|---------------------|
+| Packet not found | `agenthandoff status` |
+| MCP server not responding | `npx @modelcontextprotocol/inspector agenthandoff mcp start` |
+| JSONL not being read | `ls ~/.claude/projects/` — check if hash directory exists |
+| Redaction not working | `npm test src/__tests__/redact.test.ts` |
+| Schema validation error | `npm test src/__tests__/schema.test.ts` |
+
+---
 
 ```
 src/
@@ -954,9 +1533,9 @@ src/
 │   └── generic.ts        # writes .agenthandoff/injection.md
 │
 ├── mcp/
-│   ├── server.ts         # MCP server with 11 tools, stdio transport
+│   ├── server.ts         # MCP server with 16 tools, stdio transport
 │   ├── tools.ts          # tool handlers (read + write tools)
-│   └── config-generator.ts  # writes .claude/settings.json, .cursor/mcp.json, etc.
+│   └── config-generator.ts  # writes .mcp.json, .cursor/mcp.json, ~/.codex/config.toml, .vscode/mcp.json, etc.
 │
 ├── eval/
 │   ├── token-counter.ts  # token estimation

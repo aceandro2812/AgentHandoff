@@ -1,6 +1,6 @@
 {
   "name": "agenthandoff",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Trusted handoff packet system for switching context between AI coding agents",
   "type": "module",
   "main": "./dist/cli/index.js",

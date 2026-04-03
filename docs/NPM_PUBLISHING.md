@@ -151,6 +151,56 @@ What this does:
 - Pushes the branch and tag
 - Triggers the publish workflow
 
+## Exact tag and push commands
+
+GitHub Actions will not publish unless the pushed ref is a tag that starts with `v`.
+
+The simplest correct release flow is:
+
+```bash
+npm version patch
+git push origin main --follow-tags
+```
+
+That is the preferred method because `npm version` does all of this in one step:
+
+- bumps the version in `package.json`
+- updates `package-lock.json`
+- creates a release commit
+- creates a matching git tag such as `v0.1.2`
+
+Then:
+
+```bash
+git push origin main --follow-tags
+```
+
+pushes both:
+
+- the release commit to `main`
+- the matching `v*` tag to GitHub
+
+### Manual equivalent
+
+If you do not want to use `npm version`, the manual equivalent is:
+
+```bash
+git add package.json package-lock.json
+git commit -m "chore: release v0.1.2"
+git tag v0.1.2
+git push origin main
+git push origin v0.1.2
+```
+
+### Important rule
+
+The tag must match the package version:
+
+- `package.json` version: `0.1.2`
+- git tag: `v0.1.2`
+
+If they do not match, the release history becomes confusing and the npm publish flow is harder to reason about.
+
 ## Current GitHub Actions behavior
 
 The publish workflow currently does this:
@@ -208,12 +258,20 @@ That is already reflected in the workflow.
 Cause:
 
 - You pushed to `main` without creating a `v*` tag
+- You created a local tag but did not push it
+- You pushed a tag that does not begin with `v`
 
 Fix:
 
 ```bash
 npm version patch
 git push origin main --follow-tags
+```
+
+Manual fix if a tag already exists locally:
+
+```bash
+git push origin v0.1.2
 ```
 
 ### Publish job ran but npm rejected authentication

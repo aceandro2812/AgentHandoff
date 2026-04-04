@@ -1,18 +1,34 @@
 # AgentHandoff
 
+<p align="center">
+  <img src="https://capsule.render.manifest.com/?text=AgentHandoff&font=syne&size=72&weight=800&bg=0D1117,FFFFFF&fg=58A6FF,7EE787&acid=none" alt="AgentHandoff" />
+</p>
+
+<div align="center">
+
+[![npm version](https://img.shields.io/npm/v/%40jatin_iyer09%2Fagenthandoff?style=flat&color=58A6FF&label=version)](https://www.npmjs.com/package/@jatin_iyer09/agenthandoff)
+[![npm installs](https://img.shields.io/npm/dm/%40jatin_iyer09%2Fagenthandoff?style=flat&color=7EE787&label=installs)](https://www.npmjs.com/package/@jatin_iyer09/agenthandoff)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat)](LICENSE)
+[![Token Savings](https://img.shields.io/badge/Token%20Savings-60~85%25-green.svg?style=flat)](#)
+
 **Switch AI coding agents without losing context.**
+
+</div>
+
+---
 
 When you switch from Claude Code to Codex, Cursor, or Aider mid-task, the new agent starts from scratch — re-reading files, missing decisions you made, potentially repeating mistakes you already solved. A cold-start agent switch wastes **20,000–80,000 tokens** on re-discovery.
 
 AgentHandoff fixes this. The source agent writes a structured handoff packet from its own session context — zero extra API cost, perfect accuracy because the agent was there. The receiving agent picks it up via MCP (on-demand, 50–200 tokens) or a paste-ready inline block (~68 tokens).
 
-**Token reduction: 60–85% per switch (measured).**
+> 📊 **Token reduction: 60–85% per switch** (measured)
 
 ---
 
 ## Table of Contents
 
 - [How It Works](#how-it-works)
+- [Demo](#demo)
 - [Install](#install)
 - [One-Time Setup](#one-time-setup)
 - [MCP Setup](#mcp-setup)
@@ -31,7 +47,24 @@ AgentHandoff fixes this. The source agent writes a structured handoff packet fro
 
 ---
 
+## Demo
+
+**Watch the project walkthrough:** [demo-video.mp4](./demo-video.mp4)
+
+Quick links:
+
+- GitHub: <https://github.com/aceandro2812/AgentHandoff>
+- npm: <https://www.npmjs.com/package/@jatin_iyer09/agenthandoff>
+- Demo video file in repo: [demo-video.mp4](./demo-video.mp4)
+
+GitHub repository READMEs do not reliably render a playable local MP4 inline on the repo homepage, so the clean repo-native approach is a prominent direct link to the video file.
+
+---
+
 ## How It Works
+
+<details>
+<summary><strong>Click to expand the architecture diagram</strong></summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -44,13 +77,13 @@ AgentHandoff fixes this. The source agent writes a structured handoff packet fro
 │                                                                 │
 │  The agent writes .agenthandoff/current-handoff.json           │
 │  from its own context — no external API, no scraping           │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │
+└──────────────────────────────┬──────────��───────────────────────┘
+                                │
                     structured JSON packet
                     (decisions, task state,
                      warnings, failed attempts,
                      related files, next action)
-                               │
+                                │
 ┌──────────────────────────────▼──────────────────────────────────┐
 │                    RECEIVING AGENT SESSION                       │
 │                                                                 │
@@ -67,6 +100,8 @@ AgentHandoff fixes this. The source agent writes a structured handoff packet fro
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+</details>
+
 **The key insight**: the source agent already has the full session in its context window. Asking it to write the packet is free — the same session you are already paying for. No Haiku call. No JSONL parsing. No regex. The agent was there; it knows everything.
 
 ---
@@ -76,7 +111,7 @@ AgentHandoff fixes this. The source agent writes a structured handoff packet fro
 ### From npm (recommended)
 
 ```bash
-npm install -g agenthandoff
+npm install -g @jatin_iyer09/agenthandoff
 ```
 
 ### From source
@@ -477,6 +512,11 @@ agenthandoff clean     # remove all injected artifacts (full rollback)
 ---
 
 ## Agent-Specific Guides
+
+> 💡 **Tip:** Each agent below has specific configuration. Click to expand the one you're using.
+
+<details>
+<summary><strong>Claude Code</strong> — Setup & usage guide</summary>
 
 ### Claude Code
 
@@ -1190,7 +1230,7 @@ agenthandoff add --warning  "Prisma migration pending — do not run prod deploy
 
 The MCP server does not start automatically when you install agenthandoff. First-time users must run `agenthandoff setup` (or `agenthandoff mcp config --for <agent>`) to write the correct agent-specific MCP config. Once that config exists, the agent launches `agenthandoff mcp start` automatically at startup.
 
-**Impact:** Confusing for first-time users who expect MCP to work immediately after `npm install -g agenthandoff`.
+**Impact:** Confusing for first-time users who expect MCP to work immediately after `npm install -g @jatin_iyer09/agenthandoff`.
 
 **Resolution:** See the [MCP Setup](#mcp-setup) section for per-agent setup instructions. If an agent is not launching the server, re-run `agenthandoff mcp config --for <agent>` and restart the agent.
 

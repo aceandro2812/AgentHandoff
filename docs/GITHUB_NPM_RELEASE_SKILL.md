@@ -15,6 +15,7 @@ Current assumptions:
 - publish trigger: git tags matching `v*`
 - npm package name: `@jatin_iyer09/agenthandoff`
 - publish mode: npm trusted publishing via GitHub Actions
+- known-good published tag: `v0.1.4`
 
 ## Core rule
 
@@ -44,6 +45,16 @@ Before creating a release, verify all of these:
 3. The working tree is clean except for intentional release files
 4. `package.json` and `package-lock.json` are in sync
 5. Tests pass
+6. `package.json` includes repository metadata for provenance verification
+
+Required metadata:
+
+```json
+"repository": {
+  "type": "git",
+  "url": "https://github.com/aceandro2812/AgentHandoff"
+}
+```
 
 ## Safe release workflow
 
@@ -182,6 +193,26 @@ Result:
 
 Do not create release tags until npm setup is complete.
 
+### Mistake 5: missing repository metadata in `package.json`
+
+Result:
+
+- GitHub Actions publish runs
+- npm rejects the publish during provenance verification
+
+Typical error:
+
+```text
+Error verifying sigstore provenance bundle
+Failed to validate repository information
+```
+
+Fix:
+
+- add a correct `repository.url` pointing at `https://github.com/aceandro2812/AgentHandoff`
+- create a new patch release
+- push the new `v*` tag
+
 ## When publish is skipped
 
 If GitHub shows `publish` skipped, check:
@@ -206,7 +237,8 @@ Check these in order:
 2. workflow filename in npm matches `publish.yml`
 3. package version is new
 4. package name is correct
-5. GitHub Actions run is on the tag ref, not just `main`
+5. `package.json` contains correct repository metadata
+6. GitHub Actions run is on the tag ref, not just `main`
 
 ## Repository-specific files involved
 

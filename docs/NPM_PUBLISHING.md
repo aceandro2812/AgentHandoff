@@ -14,6 +14,16 @@ Current publish workflow:
 - Publish trigger: git tags matching `v*`
 - Publish method: npm trusted publishing via GitHub Actions OIDC
 
+## Confirmed working state
+
+This flow was successfully validated with release tag:
+
+```text
+v0.1.4
+```
+
+That release published successfully through GitHub Actions to npm.
+
 ## How the release flow works
 
 1. Push code to `main`
@@ -251,6 +261,30 @@ npm publish --access public
 
 That is already reflected in the workflow.
 
+### Repository metadata is required for provenance
+
+When using npm trusted publishing with GitHub Actions provenance, `package.json` must include repository metadata that matches the GitHub repository used by the workflow.
+
+This repository now includes:
+
+```json
+"repository": {
+  "type": "git",
+  "url": "https://github.com/aceandro2812/AgentHandoff"
+}
+```
+
+Also included for completeness:
+
+```json
+"homepage": "https://github.com/aceandro2812/AgentHandoff#readme",
+"bugs": {
+  "url": "https://github.com/aceandro2812/AgentHandoff/issues"
+}
+```
+
+Without correct repository metadata, npm provenance verification can fail even if the trusted publisher is configured correctly.
+
 ## Troubleshooting
 
 ### Publish job was skipped
@@ -285,6 +319,49 @@ Fix:
 
 - Recheck npm package settings
 - Recheck GitHub user/org, repository, and workflow filename
+
+### Publish job failed with a provenance repository error
+
+Example failure:
+
+```text
+Error verifying sigstore provenance bundle:
+Failed to validate repository information:
+package.json: "repository.url" is "", expected to match
+"https://github.com/aceandro2812/AgentHandoff" from provenance
+```
+
+Cause:
+
+- `package.json` was missing `repository.url`
+- npm could not match the published package metadata to the GitHub Actions provenance source
+
+Fix:
+
+- add a valid `repository` block to `package.json`
+- release a new version
+- push a new `v*` tag
+
+Example:
+
+```bash
+npm version patch
+git push origin main --follow-tags
+```
+
+This exact issue was resolved before the successful `v0.1.4` publish.
+
+### npm warned about `always-auth`
+
+Example warning:
+
+```text
+npm warn Unknown user config "always-auth"
+```
+
+This warning is not the publish blocker in this repository.
+
+It comes from npm configuration in the runner or user environment and does not prevent publish by itself.
 
 ### Publish job ran but npm rejected the version
 
